@@ -1,4 +1,8 @@
 import { useState } from "react";
+
+import Sidebar from "../components/Sidebar/Sidebar";
+import ChatHeader from "../components/Header/ChatHeader";
+
 import "./ChatView.css";
 
 interface Message {
@@ -6,10 +10,44 @@ interface Message {
   content: string;
 }
 
+interface Conversation {
+  id: number;
+  title: string;
+  messages: Message[];
+}
+
 function ChatView() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<
+    number | null
+  >(null);
+
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const activeConversation = conversations.find(
+    (conversation) => conversation.id === activeConversationId,
+  );
+
+  const messages = activeConversation?.messages ?? [];
+
+  const createConversation = () => {
+    const id = Date.now();
+
+    const conversation: Conversation = {
+      id,
+      title: "New Chat",
+      messages: [],
+    };
+
+    setConversations((previous) => [
+      ...previous,
+      conversation,
+    ]);
+
+    setActiveConversationId(id);
+    setInput("");
+  };
 
   const sendMessage = async () => {
     const message = input.trim();
@@ -18,14 +56,46 @@ function ChatView() {
       return;
     }
 
-    // Add user message immediately
-    setMessages((previous) => [
-      ...previous,
-      {
-        role: "user",
-        content: message,
-      },
-    ]);
+    let conversationId = activeConversationId;
+
+    if (!conversationId) {
+      conversationId = Date.now();
+
+      const newConversation: Conversation = {
+        id: conversationId,
+        title:
+          message.length > 30
+            ? `${message.substring(0, 30)}...`
+            : message,
+        messages: [],
+      };
+
+      setConversations((previous) => [
+        ...previous,
+        newConversation,
+      ]);
+
+      setActiveConversationId(conversationId);
+    }
+
+    const userMessage: Message = {
+      role: "user",
+      content: message,
+    };
+
+    setConversations((previous) =>
+      previous.map((conversation) =>
+        conversation.id === conversationId
+          ? {
+              ...conversation,
+              messages: [
+                ...conversation.messages,
+                userMessage,
+              ],
+            }
+          : conversation,
+      ),
+    );
 
     setInput("");
     setLoading(true);
@@ -42,30 +112,53 @@ function ChatView() {
       });
 
       if (!response.ok) {
-        throw new Error(`API request failed: ${response.status}`);
+        throw new Error(
+          `API request failed: ${response.status}`,
+        );
       }
 
       const data = await response.json();
 
-      // Add LLM response
-      setMessages((previous) => [
-        ...previous,
-        {
-          role: "assistant",
-          content: data.response,
-        },
-      ]);
+      const assistantMessage: Message = {
+        role: "assistant",
+        content: data.response,
+      };
+
+      setConversations((previous) =>
+        previous.map((conversation) =>
+          conversation.id === conversationId
+            ? {
+                ...conversation,
+                messages: [
+                  ...conversation.messages,
+                  assistantMessage,
+                ],
+              }
+            : conversation,
+        ),
+      );
     } catch (error) {
       console.error("Chat error:", error);
 
-      setMessages((previous) => [
-        ...previous,
-        {
-          role: "assistant",
-          content:
-            "Sorry, I couldn't process your request. Please try again.",
-        },
-      ]);
+      const errorMessage: Message = {
+        role: "assistant",
+        content:
+          "Sorry, I couldn't process your request. Please try again.",
+      };
+
+      setConversations((previous) =>
+        previous.map((conversation) =>
+          conversation.id === conversationId
+            ? {
+                ...conversation,
+                messages: [
+                  ...conversation.messages,
+                  errorMessage,
+                ],
+              }
+            : conversation,
+        ),
+      );
     } finally {
       setLoading(false);
     }
@@ -80,75 +173,95 @@ function ChatView() {
     }
   };
 
+  const handleSelectConversation = (id: number) => {
+    if (loading) {
+      return;
+    }
+
+    setActiveConversationId(id);
+    setInput("");
+  };
+
   return (
-    <div className="chat-page">
-      {/* Header */}
-      <header className="chat-header">
-        <div className="chat-title">
-          <h1>Personal Assistant</h1>
-          <span>AI Assistant</span>
-        </div>
-      </header>
+    <div className="chat-app">
+      <Sidebar
+        conversations={conversations}
+        activeConversationId={activeConversationId}
+        onNewChat={createConversation}
+        onSelectConversation={handleSelectConversation}
+      />
 
-      {/* Messages */}
-      <main className="chat-content">
-        {messages.length === 0 ? (
-          <div className="chat-empty">
-            <h2>How can I help?</h2>
-            <p>
-              Ask me anything. Your Local LLM assistant is ready.
-            </p>
-          </div>
-        ) : (
-          <div className="message-list">
-            {messages.map((message, index) => (
-              <div
-                key={index}
-                className={`message-row ${message.role}`}
-              >
-                <div className="message">
-                  {message.content}
+      <section className="chat-main">
+        <ChatHeader
+          conversationTitle={
+            activeConversation?.title ?? "Local LLM"
+          }
+        />
+
+        <main className="chat-content">
+          {messages.length === 0 ? (
+            <div className="chat-empty">
+              <div className="empty-icon">✦</div>
+
+              <h2>How can I help?</h2>
+
+              <p>
+                Ask me anything. Your Local LLM assistant
+                is ready.
+              </p>
+            </div>
+          ) : (
+            <div className="message-list">
+              {messages.map((message, index) => (
+                <div
+                  key={index}
+                  className={`message-row ${message.role}`}
+                >
+                  <div className="message">
+                    {message.content}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
 
-            {loading && (
-              <div className="message-row assistant">
-                <div className="message typing">
-                  Thinking...
+              {loading && (
+                <div className="message-row assistant">
+                  <div className="message typing">
+                    Thinking...
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+          )}
+        </main>
+
+        <footer className="chat-input-area">
+          <div className="chat-input-container">
+            <textarea
+              value={input}
+              onChange={(event) =>
+                setInput(event.target.value)
+              }
+              onKeyDown={handleKeyDown}
+              placeholder="Ask anything..."
+              rows={1}
+              disabled={loading}
+            />
+
+            <button
+              type="button"
+              onClick={() => void sendMessage()}
+              disabled={!input.trim() || loading}
+              aria-label="Send message"
+            >
+              ↑
+            </button>
           </div>
-        )}
-      </main>
 
-      {/* Input */}
-      <footer className="chat-input-area">
-        <div className="chat-input-container">
-          <textarea
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask anything..."
-            rows={1}
-            disabled={loading}
-          />
-
-          <button
-            type="button"
-            onClick={() => void sendMessage()}
-            disabled={!input.trim() || loading}
-            aria-label="Send message"
-          >
-            ↑
-          </button>
-        </div>
-
-        <p className="input-hint">
-          Enter to send · Shift + Enter for a new line
-        </p>
-      </footer>
+          <p className="input-hint">
+            Enter to send · Shift + Enter for a new line
+          </p>
+        </footer>
+      </section>
     </div>
   );
 }
