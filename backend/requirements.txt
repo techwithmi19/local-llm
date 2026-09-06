@@ -1,0 +1,33 @@
+# LLM
+openai
+google-genai
+ollama
+
+# API
+fastapi
+uvicorn
+
+# Configuration
+pydantic
+pydantic-settings
+python-dotenv
+
+# RAG
+langchain
+langchain-community
+langchain-core
+chromadb
+sentence-transformers
+
+# Document processing
+pypdf
+python-docx
+openpyxl
+
+# HTTP
+requests
+httpx
+
+# Testing
+pytest
+pytest-asyncio
