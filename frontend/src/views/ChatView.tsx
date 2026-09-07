@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import Sidebar from "../components/Sidebar/Sidebar";
 import ChatHeader from "../components/Header/ChatHeader";
+import MarkdownMessage from "../components/Chat/MarkdownMessage";
 
 import "./ChatView.css";
 
@@ -24,12 +25,26 @@ function ChatView() {
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const chatContentRef = useRef<HTMLElement>(null);
 
   const activeConversation = conversations.find(
     (conversation) => conversation.id === activeConversationId,
   );
 
   const messages = activeConversation?.messages ?? [];
+
+  useEffect(() => {
+    const chatContent = chatContentRef.current;
+
+    if (!chatContent) {
+      return;
+    }
+
+    chatContent.scrollTo({
+      top: chatContent.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [messages, loading]);
 
   const createConversation = () => {
     const id = Date.now();
@@ -40,10 +55,7 @@ function ChatView() {
       messages: [],
     };
 
-    setConversations((previous) => [
-      ...previous,
-      conversation,
-    ]);
+    setConversations((previous) => [...previous, conversation]);
 
     setActiveConversationId(id);
     setInput("");
@@ -63,17 +75,11 @@ function ChatView() {
 
       const newConversation: Conversation = {
         id: conversationId,
-        title:
-          message.length > 30
-            ? `${message.substring(0, 30)}...`
-            : message,
+        title: message.length > 30 ? `${message.substring(0, 30)}...` : message,
         messages: [],
       };
 
-      setConversations((previous) => [
-        ...previous,
-        newConversation,
-      ]);
+      setConversations((previous) => [...previous, newConversation]);
 
       setActiveConversationId(conversationId);
     }
@@ -88,10 +94,7 @@ function ChatView() {
         conversation.id === conversationId
           ? {
               ...conversation,
-              messages: [
-                ...conversation.messages,
-                userMessage,
-              ],
+              messages: [...conversation.messages, userMessage],
             }
           : conversation,
       ),
@@ -112,9 +115,7 @@ function ChatView() {
       });
 
       if (!response.ok) {
-        throw new Error(
-          `API request failed: ${response.status}`,
-        );
+        throw new Error(`API request failed: ${response.status}`);
       }
 
       const data = await response.json();
@@ -129,10 +130,7 @@ function ChatView() {
           conversation.id === conversationId
             ? {
                 ...conversation,
-                messages: [
-                  ...conversation.messages,
-                  assistantMessage,
-                ],
+                messages: [...conversation.messages, assistantMessage],
               }
             : conversation,
         ),
@@ -142,8 +140,7 @@ function ChatView() {
 
       const errorMessage: Message = {
         role: "assistant",
-        content:
-          "Sorry, I couldn't process your request. Please try again.",
+        content: "Sorry, I couldn't process your request. Please try again.",
       };
 
       setConversations((previous) =>
@@ -151,10 +148,7 @@ function ChatView() {
           conversation.id === conversationId
             ? {
                 ...conversation,
-                messages: [
-                  ...conversation.messages,
-                  errorMessage,
-                ],
+                messages: [...conversation.messages, errorMessage],
               }
             : conversation,
         ),
@@ -164,9 +158,7 @@ function ChatView() {
     }
   };
 
-  const handleKeyDown = (
-    event: React.KeyboardEvent<HTMLTextAreaElement>,
-  ) => {
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       void sendMessage();
@@ -193,41 +185,31 @@ function ChatView() {
 
       <section className="chat-main">
         <ChatHeader
-          conversationTitle={
-            activeConversation?.title ?? "Local LLM"
-          }
+          conversationTitle={activeConversation?.title ?? "Local LLM"}
         />
 
-        <main className="chat-content">
+        <main ref={chatContentRef} className="chat-content">
           {messages.length === 0 ? (
             <div className="chat-empty">
               <div className="empty-icon">✦</div>
 
               <h2>How can I help?</h2>
 
-              <p>
-                Ask me anything. Your Local LLM assistant
-                is ready.
-              </p>
+              <p>Ask me anything. Your Local LLM assistant is ready.</p>
             </div>
           ) : (
             <div className="message-list">
               {messages.map((message, index) => (
-                <div
-                  key={index}
-                  className={`message-row ${message.role}`}
-                >
+                <div key={index} className={`message-row ${message.role}`}>
                   <div className="message">
-                    {message.content}
+                    <MarkdownMessage content={message.content} />
                   </div>
                 </div>
               ))}
 
               {loading && (
                 <div className="message-row assistant">
-                  <div className="message typing">
-                    Thinking...
-                  </div>
+                  <div className="message typing">Thinking...</div>
                 </div>
               )}
             </div>
@@ -238,9 +220,7 @@ function ChatView() {
           <div className="chat-input-container">
             <textarea
               value={input}
-              onChange={(event) =>
-                setInput(event.target.value)
-              }
+              onChange={(event) => setInput(event.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask anything..."
               rows={1}
