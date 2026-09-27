@@ -19,4 +19,8 @@ class ProviderFactory:
             from app.services.providers.groq_provider import GroqProvider
             return GroqProvider()
 
+        if provider == "kimi":
+            from app.services.providers.kimi_provider import KimiProvider
+            return KimiProvider()
+
         raise ValueError(f"Unsupported LLM provider: {settings.llm_provider}")

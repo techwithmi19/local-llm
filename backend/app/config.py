@@ -13,8 +13,11 @@ class Settings(BaseSettings):
     llm_model: str = ""
     
     openai_api_key: str = ""
+    kimi_api_key: str = ""
     gemini_api_key: str = ""
     groq_api_key: str = ""
+
+    kimi_base_url: str = ""
 
     ollama_base_url: str = "http://localhost:11434"
 

@@ -7,8 +7,11 @@ import MarkdownMessage from "../components/Chat/MarkdownMessage";
 import "./ChatView.css";
 
 interface Message {
+  id: number;
+  conversation_id: number | null;
   role: "user" | "assistant";
   content: string;
+  created_at: string;
 }
 
 interface Conversation {
@@ -25,6 +28,8 @@ function ChatView() {
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+
   const chatContentRef = useRef<HTMLElement>(null);
 
   const activeConversation = conversations.find(
@@ -33,6 +38,95 @@ function ChatView() {
 
   const messages = activeConversation?.messages ?? [];
 
+  /*
+   * Load conversations when the page is opened/refreshed.
+   */
+  useEffect(() => {
+    const loadConversations = async () => {
+      try {
+        const response = await fetch("/api/v1/conversations");
+
+        if (!response.ok) {
+          throw new Error(
+            `Failed to load conversations: ${response.status}`,
+          );
+        }
+
+        const data: Array<{
+          id: number;
+          title: string;
+        }> = await response.json();
+
+        const loadedConversations: Conversation[] = data.map(
+          (conversation) => ({
+            id: conversation.id,
+            title: conversation.title,
+            messages: [],
+          }),
+        );
+
+        setConversations(loadedConversations);
+
+        /*
+         * Restore the first conversation when the page is refreshed.
+         */
+        if (loadedConversations.length > 0) {
+          setActiveConversationId(loadedConversations[0].id);
+        }
+      } catch (error) {
+        console.error("Failed to load conversations:", error);
+      } finally {
+        setInitialLoading(false);
+      }
+    };
+
+    void loadConversations();
+  }, []);
+
+  /*
+   * Load messages whenever the active conversation changes.
+   */
+  useEffect(() => {
+    if (activeConversationId === null) {
+      return;
+    }
+
+    const loadConversation = async () => {
+      try {
+        const response = await fetch(
+          `/api/v1/conversations/${activeConversationId}`,
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `Failed to load conversation: ${response.status}`,
+          );
+        }
+
+        const data: Conversation = await response.json();
+
+        setConversations((previous) =>
+          previous.map((conversation) =>
+            conversation.id === data.id
+              ? {
+                  ...conversation,
+                  title: data.title,
+                  messages: data.messages,
+                }
+              : conversation,
+          ),
+        );
+      } catch (error) {
+        console.error("Failed to load conversation:", error);
+      }
+    };
+
+    void loadConversation();
+  }, [activeConversationId]);
+
+  /*
+   * Scroll to the bottom whenever messages or loading state changes.
+   */
   useEffect(() => {
     const chatContent = chatContentRef.current;
 
@@ -46,21 +140,57 @@ function ChatView() {
     });
   }, [messages, loading]);
 
-  const createConversation = () => {
-    const id = Date.now();
+  /*
+   * Create a new conversation in the database.
+   */
+  const createConversation = async () => {
+    if (loading) {
+      return;
+    }
 
-    const conversation: Conversation = {
-      id,
-      title: "New Chat",
-      messages: [],
-    };
+    try {
+      const response = await fetch("/api/v1/conversations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: "New Chat",
+        }),
+      });
 
-    setConversations((previous) => [...previous, conversation]);
+      if (!response.ok) {
+        throw new Error(
+          `Failed to create conversation: ${response.status}`,
+        );
+      }
 
-    setActiveConversationId(id);
-    setInput("");
+      const data: {
+        id: number;
+        title: string;
+      } = await response.json();
+
+      const newConversation: Conversation = {
+        id: data.id,
+        title: data.title,
+        messages: [],
+      };
+
+      setConversations((previous) => [
+        ...previous,
+        newConversation,
+      ]);
+
+      setActiveConversationId(data.id);
+      setInput("");
+    } catch (error) {
+      console.error("Failed to create conversation:", error);
+    }
   };
 
+  /*
+   * Send a message to the active conversation.
+   */
   const sendMessage = async () => {
     const message = input.trim();
 
@@ -71,48 +201,65 @@ function ChatView() {
     let conversationId = activeConversationId;
 
     if (!conversationId) {
-      conversationId = Date.now();
+      try {
+        const conversationResponse = await fetch(
+          "/api/v1/conversations",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              title:
+                message.length > 30
+                  ? `${message.substring(0, 30)}...`
+                  : message,
+            }),
+          },
+        );
 
-      const newConversation: Conversation = {
-        id: conversationId,
-        title: message.length > 30 ? `${message.substring(0, 30)}...` : message,
-        messages: [],
-      };
+        if (!conversationResponse.ok) {
+          throw new Error(
+            `Conversation creation failed: ${conversationResponse.status}`,
+          );
+        }
 
-      setConversations((previous) => [...previous, newConversation]);
+        const conversationData = await conversationResponse.json();
 
-      setActiveConversationId(conversationId);
+        conversationId = conversationData.id;
+
+        setConversations((previous) => [
+          ...previous,
+          {
+            id: conversationData.id,
+            title: conversationData.title,
+            messages: [],
+          },
+        ]);
+
+        setActiveConversationId(conversationId);
+      } catch (error) {
+        console.error("Conversation creation error:", error);
+        return;
+      }
     }
-
-    const userMessage: Message = {
-      role: "user",
-      content: message,
-    };
-
-    setConversations((previous) =>
-      previous.map((conversation) =>
-        conversation.id === conversationId
-          ? {
-              ...conversation,
-              messages: [...conversation.messages, userMessage],
-            }
-          : conversation,
-      ),
-    );
 
     setInput("");
     setLoading(true);
 
     try {
-      const response = await fetch("/api/v1/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetch(
+        `/api/v1/conversations/${conversationId}/messages`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            message,
+          }),
         },
-        body: JSON.stringify({
-          message,
-        }),
-      });
+      );
 
       if (!response.ok) {
         throw new Error(`API request failed: ${response.status}`);
@@ -120,17 +267,16 @@ function ChatView() {
 
       const data = await response.json();
 
-      const assistantMessage: Message = {
-        role: "assistant",
-        content: data.response,
-      };
-
       setConversations((previous) =>
         previous.map((conversation) =>
           conversation.id === conversationId
             ? {
                 ...conversation,
-                messages: [...conversation.messages, assistantMessage],
+                messages: [
+                  ...conversation.messages,
+                  data.user_message,
+                  data.assistant_message,
+                ],
               }
             : conversation,
         ),
@@ -139,8 +285,12 @@ function ChatView() {
       console.error("Chat error:", error);
 
       const errorMessage: Message = {
+        id: Date.now(),
+        conversation_id: conversationId,
         role: "assistant",
-        content: "Sorry, I couldn't process your request. Please try again.",
+        content:
+          "Sorry, I couldn't process your request. Please try again.",
+        created_at: new Date().toISOString(),
       };
 
       setConversations((previous) =>
@@ -148,7 +298,10 @@ function ChatView() {
           conversation.id === conversationId
             ? {
                 ...conversation,
-                messages: [...conversation.messages, errorMessage],
+                messages: [
+                  ...conversation.messages,
+                  errorMessage,
+                ],
               }
             : conversation,
         ),
@@ -158,7 +311,9 @@ function ChatView() {
     }
   };
 
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = (
+    event: React.KeyboardEvent<HTMLTextAreaElement>,
+  ) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       void sendMessage();
@@ -174,6 +329,24 @@ function ChatView() {
     setInput("");
   };
 
+  if (initialLoading) {
+    return (
+      <div className="chat-app">
+        <div className="chat-main">
+          <main className="chat-content">
+            <div className="chat-empty">
+              <div className="empty-icon">✦</div>
+
+              <h2>Loading conversations...</h2>
+
+              <p>Please wait while your chat history is loaded.</p>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="chat-app">
       <Sidebar
@@ -185,7 +358,9 @@ function ChatView() {
 
       <section className="chat-main">
         <ChatHeader
-          conversationTitle={activeConversation?.title ?? "Local LLM"}
+          conversationTitle={
+            activeConversation?.title ?? "Local LLM"
+          }
         />
 
         <main ref={chatContentRef} className="chat-content">
@@ -195,21 +370,30 @@ function ChatView() {
 
               <h2>How can I help?</h2>
 
-              <p>Ask me anything. Your Local LLM assistant is ready.</p>
+              <p>
+                Ask me anything. Your Local LLM assistant is ready.
+              </p>
             </div>
           ) : (
             <div className="message-list">
-              {messages.map((message, index) => (
-                <div key={index} className={`message-row ${message.role}`}>
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`message-row ${message.role}`}
+                >
                   <div className="message">
-                    <MarkdownMessage content={message.content} />
+                    <MarkdownMessage
+                      content={message.content}
+                    />
                   </div>
                 </div>
               ))}
 
               {loading && (
                 <div className="message-row assistant">
-                  <div className="message typing">Thinking...</div>
+                  <div className="message typing">
+                    Thinking...
+                  </div>
                 </div>
               )}
             </div>
