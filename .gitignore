@@ -78,3 +78,10 @@ build/
 frontend/node_modules/
 frontend/dist/
 frontend/.env
+
+# ==============================
+# Application Database
+# ==============================
+data/*.db
+data/*.sqlite
+data/*.sqlite3

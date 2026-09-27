@@ -2,37 +2,77 @@
 
 A personal, self-hosted AI platform built around local and open-source LLMs.
 
-## Goals
+The goal is to build a ChatGPT-style application that can run locally, support multiple LLM providers, maintain conversation history, process documents, use RAG, and integrate with MCP tools.
 
-- Run LLMs locally
-- Chat with local models
-- Analyze documents and source code
-- Build RAG-based knowledge retrieval
-- Integrate MCP tools
-- Integrate GitLab and TMS
-- Keep private data local
-- Provide an extensible API and web interface
+---
+
+## Project Status
+
+### Phase 1 — Chat Foundation
+
+- [x] FastAPI backend
+- [x] LLM provider configuration
+- [x] Basic chat API
+- [ ] Store conversations in database
+- [ ] Load previous chats after page refresh
+- [ ] Create conversations
+- [ ] Delete conversations
+
+### Phase 2 — File Upload
+
+- [ ] Add `/files/upload` API
+- [ ] Support PDF, TXT, DOCX, etc.
+- [ ] Save uploaded files locally
+- [ ] Track files against conversations
+- [ ] File list
+- [ ] File delete
+
+### Phase 3 — RAG
+
+- [ ] Extract text from documents
+- [ ] Split documents into chunks
+- [ ] Generate embeddings
+- [ ] Store embeddings in ChromaDB
+- [ ] Retrieve relevant chunks
+- [ ] Send retrieved context to LLM
+- [ ] Return document/source references
+
+### Phase 4 — Frontend
+
+- [x] Basic chat UI
+- [ ] Conversation sidebar
+- [ ] Create conversation
+- [ ] Delete conversation
+- [ ] Load conversation history
+- [ ] File upload UI
+- [ ] Streaming responses
+- [ ] Source/document references
+
+---
 
 ## Architecture
 
-See `architecture.png` for the current high-level architecture.
-
-## Project Structure
-
-app/              Application code
-config/           Configuration
-documents/        Local documents
-models/            Model configuration
-rag/              Retrieval-Augmented Generation
-mcp/              MCP servers and integrations
-scripts/          Utility scripts
-tests/            Automated tests
-data/              Runtime data
-docker/            Container configuration
-logs/              Application logs
-
-
-## Commands
-activate environment    python -m venv .venv
-
-.venv\Scripts\Activate.ps1
+```text
+                         ┌──────────────────┐
+                         │    Frontend      │
+                         │  React + Vite    │
+                         └────────┬─────────┘
+                                  │
+                                  │ REST API
+                                  ▼
+                         ┌──────────────────┐
+                         │     FastAPI      │
+                         │     Backend      │
+                         └────────┬─────────┘
+                                  │
+                   ┌──────────────┼──────────────┐
+                   │              │              │
+                   ▼              ▼              ▼
+             Conversation      LLM Service       RAG
+                Service            │          (Phase 3)
+                   │               │
+                   ▼         Provider Factory
+              SQLite DB             │
+                              ┌─────┼─────┐
+                              ▼     ▼     ▼
+                           OpenAI Gemini Groq
