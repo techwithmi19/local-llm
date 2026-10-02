@@ -47,6 +47,16 @@ async def health():
     }
 
 
+@app.get("/api/v1/config")
+async def get_config():
+    """Expose non-sensitive configuration to the frontend."""
+    return {
+        "app_name": settings.app_name,
+        "provider": settings.llm_provider,
+        "model": settings.llm_model,
+    }
+
+
 # React frontend
 if FRONTEND_DIST.exists():
     app.mount(

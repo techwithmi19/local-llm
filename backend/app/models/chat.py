@@ -14,4 +14,4 @@ class ChatResponse(BaseModel):
 class ConversationWithMessagesResponse(BaseModel):
     id: int
     title: str
-    messages: list[MessageResponse]    
+    messages: list[MessageResponse]

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,7 +39,7 @@ async def add_message(db: AsyncSession, conversation_id: int, role: str, content
     conversation = await get_conversation(db, conversation_id)
 
     if conversation is not None:
-        conversation.updated_at = datetime.utcnow()
+        conversation.updated_at = datetime.now(timezone.utc)
 
     await db.commit()
     await db.refresh(message)
