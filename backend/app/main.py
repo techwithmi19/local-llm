@@ -1,3 +1,7 @@
+import truststore
+
+truststore.inject_into_ssl()
+
 from pathlib import Path
 from contextlib import asynccontextmanager
 
@@ -9,9 +13,7 @@ from app.api.conversations import router as conversation_router
 from app.api.conversation_messages import router as conversation_messages_router
 from app.config import settings
 from app.database.database import init_db
-import truststore
 
-truststore.inject_into_ssl()
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 FRONTEND_DIST = BASE_DIR / "frontend" / "dist"

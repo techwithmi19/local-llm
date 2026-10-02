@@ -5,6 +5,8 @@ openai
 google-genai
 groq
 ollama
+groq
+truststore
 
 # ============================================
 # Web API
@@ -18,21 +20,22 @@ uvicorn
 pydantic
 pydantic-settings
 python-dotenv
+python-multipart
 
 # ============================================
 # Database
 # ============================================
-sqlalchemy
+sqlalchemy[asyncio]
 aiosqlite
 
 # ============================================
 # RAG - Phase 3
 # ============================================
-langchain
-langchain-community
-langchain-core
-chromadb
-sentence-transformers
+# langchain
+# langchain-community
+# langchain-core
+# chromadb
+# sentence-transformers
 
 # ============================================
 # Document Processing - Phase 2

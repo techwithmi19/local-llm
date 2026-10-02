@@ -12,6 +12,7 @@ env/
 # ==============================
 # Environment / Secrets
 # ==============================
+.tar
 .env
 .env.*
 !.env.example
