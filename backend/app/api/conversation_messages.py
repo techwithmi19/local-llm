@@ -7,6 +7,7 @@ from app.api.conversations import MessageResponse, SendMessageResponse
 from app.services.conversation_service import (
     add_message,
     get_conversation,
+    get_messages,
 )
 from app.services.llm_service import LLMService
 
@@ -40,16 +41,27 @@ async def send_message(
         )
 
     # Save user message
-    await add_message(
+    user_message = await add_message(
         db=db,
         conversation_id=conversation_id,
         role="user",
         content=request.message,
     )
 
-    # Generate assistant response
+    # Load full conversation history (including the user message just saved)
+    history = await get_messages(
+        db=db,
+        conversation_id=conversation_id,
+    )
+
+    messages = [
+        {"role": message.role, "content": message.content}
+        for message in history
+    ]
+
+    # Generate assistant response with history
     response = await llm_service.generate(
-        message=request.message,
+        messages=messages,
         system_prompt=request.system_prompt,
     )
 
@@ -59,13 +71,6 @@ async def send_message(
         conversation_id=conversation_id,
         role="assistant",
         content=response,
-    )
-
-    user_message = await add_message(
-        db=db,
-        conversation_id=conversation_id,
-        role="user",
-        content=request.message,
     )
 
     return SendMessageResponse(

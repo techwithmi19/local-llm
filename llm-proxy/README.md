@@ -32,3 +32,7 @@ podman logs local-llm
 
 run local llm locally
 uvicorn app.main:app --reload                              
+python -m uvicorn app.main:app --host 0.0.0.0 --port 7000 --reload
+
+build frontend repo
+npm run build

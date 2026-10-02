@@ -10,10 +10,12 @@ async def main():
     # provider = GeminiProvider()  
     provider = GroqProvider()  
 
-    response = await provider.generate(
-        message="Say hello in one sentence."
-        # message="Read https://groq.com and summarize what Groq does."
-    )
+    messages = [
+        {"role": "user", "content": "Say hello in one sentence."}
+        # {"role": "user", "content": "Read https://groq.com and summarize what Groq does."}
+    ]
+
+    response = await provider.generate(messages=messages)
 
     print("Response:")
     print(response)
