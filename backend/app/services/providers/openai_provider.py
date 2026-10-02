@@ -12,14 +12,24 @@ class OpenAIProvider(LLMProvider):
 
     async def generate(
         self,
-        message: str,
+        messages: list[dict[str, str]],
         system_prompt: str | None = None,
     ) -> str:
 
-        response = await self.client.responses.create(
+        request_messages = list(messages)
+
+        if system_prompt:
+            request_messages.insert(
+                0,
+                {
+                    "role": "system",
+                    "content": system_prompt,
+                },
+            )
+
+        response = await self.client.chat.completions.create(
             model=self.model,
-            instructions=system_prompt,
-            input=message,
+            messages=request_messages,
         )
 
-        return response.output_text
+        return response.choices[0].message.content or ""

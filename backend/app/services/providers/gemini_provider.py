@@ -14,21 +14,27 @@ class GeminiProvider(LLMProvider):
 
     async def generate(
         self,
-        message: str,
+        messages: list[dict[str, str]],
         system_prompt: str | None = None,
     ) -> str:
 
-        prompt = message
+        # Gemini uses "model" for assistant messages and "user" for user messages.
+        contents = [
+            {
+                "role": "model" if msg["role"] == "assistant" else msg["role"],
+                "parts": [{"text": msg["content"]}],
+            }
+            for msg in messages
+        ]
 
+        config = {}
         if system_prompt:
-            prompt = (
-                f"System instructions:\n{system_prompt}\n\n"
-                f"User:\n{message}"
-            )
+            config["system_instruction"] = system_prompt
 
         response = await self.client.aio.models.generate_content(
             model=self.model,
-            contents=prompt,
+            contents=contents,
+            config=config,
         )
 
         return response.text

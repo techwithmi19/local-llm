@@ -17,30 +17,24 @@ class GroqProvider(LLMProvider):
 
     async def generate(
         self,
-        message: str,
+        messages: list[dict[str, str]],
         system_prompt: str | None = None,
     ) -> str:
 
-        messages = []
+        request_messages = list(messages)
 
         if system_prompt:
-            messages.append(
+            request_messages.insert(
+                0,
                 {
                     "role": "system",
                     "content": system_prompt,
-                }
+                },
             )
-
-        messages.append(
-            {
-                "role": "user",
-                "content": message,
-            }
-        )
 
         response = await self.client.chat.completions.create(
             model=self.model,
-            messages=messages,
+            messages=request_messages,
         )
 
         return response.choices[0].message.content or ""
