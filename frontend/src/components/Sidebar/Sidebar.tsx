@@ -73,12 +73,7 @@ function Sidebar({
         </div>
       </div>
 
-      <div className="sidebar-bottom">
-        <button type="button" className="sidebar-option">
-          <span>⚙</span>
-          <span>Settings</span>
-        </button>
-      </div>
+      <div className="sidebar-bottom" />
     </aside>
   );
 }

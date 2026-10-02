@@ -40,32 +40,26 @@ async def send_message(
             detail="Conversation not found",
         )
 
-    # Save user message
+    # Build the full conversation history for the LLM
+    history = [
+        {"role": msg.role, "content": msg.content}
+        for msg in conversation.messages
+    ]
+    history.append({"role": "user", "content": request.message})
+
+    # Generate assistant response using history
+    response = await llm_service.generate(
+        messages=history,
+        system_prompt=request.system_prompt,
+    )
+
+    # Persist the new user message and assistant response
     user_message = await add_message(
         db=db,
         conversation_id=conversation_id,
         role="user",
         content=request.message,
     )
-
-    # Load full conversation history (including the user message just saved)
-    history = await get_messages(
-        db=db,
-        conversation_id=conversation_id,
-    )
-
-    messages = [
-        {"role": message.role, "content": message.content}
-        for message in history
-    ]
-
-    # Generate assistant response with history
-    response = await llm_service.generate(
-        messages=messages,
-        system_prompt=request.system_prompt,
-    )
-
-    # Save assistant message
     assistant_message = await add_message(
         db=db,
         conversation_id=conversation_id,

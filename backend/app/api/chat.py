@@ -12,8 +12,9 @@ llm_service = LLMService()
 
 @router.post("", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
-    messages = [{"role": "user", "content": request.message}]
-
+    messages = [
+        {"role": "user", "content": request.message},
+    ]
     response = await llm_service.generate(
         messages=messages,
         system_prompt=request.system_prompt,
