@@ -11,7 +11,7 @@ class Settings(BaseSettings):
 
     llm_provider: str = ""
     llm_model: str = ""
-    
+
     openai_api_key: str = ""
     kimi_api_key: str = ""
     gemini_api_key: str = ""
@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     kimi_base_url: str = ""
 
     ollama_base_url: str = "http://localhost:11434"
+
+    # CORS: comma-separated list of allowed origins (e.g. "http://localhost:5173,http://localhost:3000")
+    cors_origins: str = "*"
+
+    # Database URL. Defaults to a local SQLite file under data/ if left empty.
+    database_url: str = ""
 
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",

@@ -17,10 +17,10 @@ create image
 podman build -t localhost/local-llm:latest . 
 
 run image
-podman run -d `
-  --name local-llm `
-  --env-file .env `
-  -p 8000:8000 `
+podman run -d \
+  --name local-llm \
+  --env-file .env \
+  -p 8000:8000 \
   localhost/local-llm:latest
 
 check podman
