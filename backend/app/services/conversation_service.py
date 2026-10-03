@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database.models import Conversation, Message
 
@@ -20,7 +21,11 @@ async def get_conversations(db: AsyncSession)-> list[Conversation]:
 
 
 async def get_conversation(db: AsyncSession, conversation_id: int) -> Conversation | None:
-    result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
+    result = await db.execute(
+        select(Conversation)
+        .where(Conversation.id == conversation_id)
+        .options(selectinload(Conversation.messages))
+    )
     return result.scalar_one_or_none()
 
 

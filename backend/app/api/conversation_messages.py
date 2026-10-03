@@ -41,9 +41,10 @@ async def send_message(
         )
 
     # Build the full conversation history for the LLM
+    messages = await get_messages(db, conversation_id)
     history = [
         {"role": msg.role, "content": msg.content}
-        for msg in conversation.messages
+        for msg in messages
     ]
     history.append({"role": "user", "content": request.message})
 

@@ -8,12 +8,14 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 
+from app.config import settings
+
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-DATABASE_URL = f"sqlite+aiosqlite:///{DATA_DIR / 'local_llm.db'}"
+DATABASE_URL = settings.database_url or f"sqlite+aiosqlite:///{DATA_DIR / 'local_llm.db'}"
 
 
 class Base(DeclarativeBase):
