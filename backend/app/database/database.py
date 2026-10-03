@@ -40,7 +40,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db() -> None:
-    from app.database.models import Conversation, Message
+    from app.database.models import Conversation, File, Message
 
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)

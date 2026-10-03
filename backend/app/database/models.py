@@ -41,6 +41,12 @@ class Conversation(Base):
         order_by="Message.created_at",
     )
 
+    files: Mapped[list["File"]] = relationship(
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="File.created_at",
+    )
+
 
 class Message(Base):
     __tablename__ = "messages"
@@ -73,4 +79,64 @@ class Message(Base):
 
     conversation: Mapped["Conversation"] = relationship(
         back_populates="messages",
+    )
+
+
+class File(Base):
+    __tablename__ = "files"
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    conversation_id: Mapped[int] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    original_filename: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+    )
+
+    stored_filename: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        unique=True,
+    )
+
+    file_path: Mapped[str] = mapped_column(
+        String(512),
+        nullable=False,
+    )
+
+    mime_type: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+    )
+
+    size: Mapped[int] = mapped_column(
+        nullable=False,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(50),
+        default="pending",
+        nullable=False,
+    )
+
+    extracted_text: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=utc_now,
+    )
+
+    conversation: Mapped["Conversation"] = relationship(
+        back_populates="files",
     )
