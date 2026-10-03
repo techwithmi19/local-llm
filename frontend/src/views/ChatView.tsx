@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import Sidebar from "../components/Sidebar/Sidebar";
 import ChatHeader from "../components/Header/ChatHeader";
 import MarkdownMessage from "../components/Chat/MarkdownMessage";
+import FileAttachment from "../components/Chat/FileAttachment";
 
 import "./ChatView.css";
 
@@ -20,6 +21,15 @@ interface Conversation {
   messages: Message[];
 }
 
+export interface FileRecord {
+  id: number;
+  conversation_id: number;
+  original_filename: string;
+  mime_type: string;
+  size: number;
+  status: string;
+}
+
 function ChatView() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<
@@ -30,13 +40,31 @@ function ChatView() {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
 
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [conversationFiles, setConversationFiles] = useState<
+    FileRecord[]
+  >([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isOverDropZone, setIsOverDropZone] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    selectedFilesRef.current = selectedFiles;
+    console.log("selectedFiles updated:", selectedFiles.length, selectedFiles.map((f) => f.name));
+  }, [selectedFiles]);
+
   const chatContentRef = useRef<HTMLElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const selectedFilesRef = useRef<File[]>([]);
 
   const activeConversation = conversations.find(
     (conversation) => conversation.id === activeConversationId,
   );
 
-  const messages = activeConversation?.messages ?? [];
+  const messages = useMemo(
+    () => activeConversation?.messages ?? [],
+    [activeConversation?.messages],
+  );
 
   /*
    * Load conversations when the page is opened/refreshed.
@@ -84,7 +112,7 @@ function ChatView() {
   }, []);
 
   /*
-   * Load messages whenever the active conversation changes.
+   * Load messages and attached files whenever the active conversation changes.
    */
   useEffect(() => {
     if (activeConversationId === null) {
@@ -93,17 +121,18 @@ function ChatView() {
 
     const loadConversation = async () => {
       try {
-        const response = await fetch(
-          `/api/v1/conversations/${activeConversationId}`,
-        );
+        const [conversationResponse, filesResponse] = await Promise.all([
+          fetch(`/api/v1/conversations/${activeConversationId}`),
+          fetch(`/api/v1/conversations/${activeConversationId}/files`),
+        ]);
 
-        if (!response.ok) {
+        if (!conversationResponse.ok) {
           throw new Error(
-            `Failed to load conversation: ${response.status}`,
+            `Failed to load conversation: ${conversationResponse.status}`,
           );
         }
 
-        const data: Conversation = await response.json();
+        const data: Conversation = await conversationResponse.json();
 
         setConversations((previous) =>
           previous.map((conversation) =>
@@ -116,6 +145,13 @@ function ChatView() {
               : conversation,
           ),
         );
+
+        if (filesResponse.ok) {
+          const filesData: FileRecord[] = await filesResponse.json();
+          setConversationFiles(filesData);
+        } else {
+          setConversationFiles([]);
+        }
       } catch (error) {
         console.error("Failed to load conversation:", error);
       }
@@ -189,12 +225,74 @@ function ChatView() {
   };
 
   /*
+   * Upload a list of files to a conversation.
+   */
+  const uploadFiles = async (
+    conversationId: number,
+    files: File[],
+  ): Promise<FileRecord[]> => {
+    const uploaded: FileRecord[] = [];
+
+    for (const file of files) {
+      console.log("uploadFiles uploading", file.name, file.type, file.size);
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch(
+        `/api/v1/conversations/${conversationId}/files`,
+        {
+          method: "POST",
+          body: formData,
+        },
+      );
+      console.log("uploadFiles response", response.status, response.statusText);
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(
+          `Failed to upload ${file.name}: ${response.status} ${text}`,
+        );
+      }
+
+      const record: FileRecord = await response.json();
+      console.log("uploadFiles record", record);
+      uploaded.push(record);
+    }
+
+    return uploaded;
+  };
+
+  /*
+   * Remove a file that is already attached to the conversation.
+   */
+  const removeConversationFile = async (fileId: number) => {
+    try {
+      const response = await fetch(`/api/v1/files/${fileId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete file: ${response.status}`);
+      }
+
+      setConversationFiles((previous) =>
+        previous.filter((file) => file.id !== fileId),
+      );
+    } catch (error) {
+      console.error("Failed to delete file:", error);
+    }
+  };
+
+  /*
    * Send a message to the active conversation.
    */
   const sendMessage = async () => {
     const message = input.trim();
+    const filesToUpload = selectedFilesRef.current;
+    console.log("sendMessage called message=\"%s\" selectedFiles=%s ref=%s loading=%s", message, selectedFiles.length, filesToUpload.length, loading);
 
-    if (!message || loading) {
+    if ((!message && filesToUpload.length === 0) || loading) {
+      console.log("sendMessage early return");
       return;
     }
 
@@ -213,7 +311,7 @@ function ChatView() {
               title:
                 message.length > 30
                   ? `${message.substring(0, 30)}...`
-                  : message,
+                  : message || "File upload",
             }),
           },
         );
@@ -244,12 +342,55 @@ function ChatView() {
       }
     }
 
+    if (!conversationId) {
+      return;
+    }
+
     setInput("");
     setLoading(true);
+    setUploadError(null);
+
+    let uploaded: FileRecord[] = [];
+    if (filesToUpload.length > 0) {
+      setIsUploading(true);
+
+      try {
+        uploaded = await uploadFiles(
+          conversationId,
+          filesToUpload,
+        );
+        setConversationFiles((previous) => [
+          ...previous,
+          ...uploaded,
+        ]);
+        setSelectedFiles([]);
+      } catch (error) {
+        console.error("File upload error:", error);
+        setUploadError(
+          error instanceof Error
+            ? error.message
+            : "Failed to upload file(s)",
+        );
+      } finally {
+        setIsUploading(false);
+      }
+    }
+
+    if (!message) {
+      setLoading(false);
+      return;
+    }
+
+    // Collect IDs of files uploaded in this turn so the backend knows which
+    // images to attach to the current message. This avoids resending every
+    // image in the conversation on each turn.
+    const uploadedFileIds = uploaded.map((file) => file.id);
+
+    const assistantPlaceholderId = Date.now();
 
     try {
       const response = await fetch(
-        `/api/v1/conversations/${conversationId}/messages`,
+        `/api/v1/conversations/${conversationId}/messages/stream`,
         {
           method: "POST",
           headers: {
@@ -257,30 +398,149 @@ function ChatView() {
           },
           body: JSON.stringify({
             message,
+            file_ids: uploadedFileIds,
           }),
         },
       );
 
-      if (!response.ok) {
+      if (!response.ok || !response.body) {
         throw new Error(`API request failed: ${response.status}`);
       }
 
-      const data = await response.json();
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
 
-      setConversations((previous) =>
-        previous.map((conversation) =>
-          conversation.id === conversationId
-            ? {
-                ...conversation,
-                messages: [
-                  ...conversation.messages,
-                  data.user_message,
-                  data.assistant_message,
-                ],
-              }
-            : conversation,
-        ),
-      );
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) {
+            continue;
+          }
+
+          const data = line.slice(6).trim();
+          if (!data || data === "[DONE]") {
+            continue;
+          }
+
+          try {
+            const event = JSON.parse(data) as {
+              type: string;
+              token?: string;
+              user_message?: Message;
+              assistant_message?: Message;
+              error?: string;
+            };
+
+            if (
+              event.type === "user_message" &&
+              event.user_message
+            ) {
+              setConversations((previous) =>
+                previous.map((conversation) =>
+                  conversation.id === conversationId
+                    ? {
+                        ...conversation,
+                        messages: [
+                          ...conversation.messages,
+                          event.user_message as Message,
+                          {
+                            id: assistantPlaceholderId,
+                            conversation_id: conversationId,
+                            role: "assistant",
+                            content: "",
+                            created_at: new Date().toISOString(),
+                          },
+                        ],
+                      }
+                    : conversation,
+                ),
+              );
+            } else if (
+              event.type === "token" &&
+              typeof event.token === "string"
+            ) {
+              setConversations((previous) =>
+                previous.map((conversation) =>
+                  conversation.id === conversationId
+                    ? {
+                        ...conversation,
+                        messages: conversation.messages.map(
+                          (msg) =>
+                            msg.id === assistantPlaceholderId
+                              ? {
+                                  ...msg,
+                                  content: msg.content + event.token,
+                                }
+                              : msg,
+                        ),
+                      }
+                    : conversation,
+                ),
+              );
+            } else if (
+              event.type === "done" &&
+              event.assistant_message
+            ) {
+              setConversations((previous) =>
+                previous.map((conversation) =>
+                  conversation.id === conversationId
+                    ? {
+                        ...conversation,
+                        messages: conversation.messages.map(
+                          (msg) =>
+                            msg.id === assistantPlaceholderId
+                              ? (event.assistant_message as Message)
+                              : msg,
+                        ),
+                      }
+                    : conversation,
+                ),
+              );
+            } else if (
+              event.type === "error" &&
+              typeof event.error === "string"
+            ) {
+              const errorMessage: Message = {
+                id: Date.now(),
+                conversation_id: conversationId,
+                role: "assistant",
+                content: event.error,
+                created_at: new Date().toISOString(),
+              };
+
+              setConversations((previous) =>
+                previous.map((conversation) =>
+                  conversation.id === conversationId
+                    ? {
+                        ...conversation,
+                        messages: conversation.messages.some(
+                          (msg) => msg.id === assistantPlaceholderId,
+                        )
+                          ? conversation.messages.map((msg) =>
+                              msg.id === assistantPlaceholderId
+                                ? errorMessage
+                                : msg,
+                            )
+                          : [...conversation.messages, errorMessage],
+                      }
+                    : conversation,
+                ),
+              );
+            }
+          } catch (parseError) {
+            console.error("Failed to parse SSE event:", parseError);
+          }
+        }
+      }
     } catch (error) {
       console.error("Chat error:", error);
 
@@ -298,16 +558,76 @@ function ChatView() {
           conversation.id === conversationId
             ? {
                 ...conversation,
-                messages: [
-                  ...conversation.messages,
-                  errorMessage,
-                ],
+                messages: conversation.messages.some(
+                  (msg) => msg.id === assistantPlaceholderId,
+                )
+                  ? conversation.messages.map((msg) =>
+                      msg.id === assistantPlaceholderId
+                        ? errorMessage
+                        : msg,
+                    )
+                  : [...conversation.messages, errorMessage],
               }
             : conversation,
         ),
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFileSelect = (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const files = event.target.files;
+    const filesArray = files ? Array.from(files) : [];
+    console.log("handleFileSelect files:", files?.length, filesArray.map((f) => f.name));
+
+    if (filesArray.length > 0) {
+      setSelectedFiles((previous) => [...previous, ...filesArray]);
+      setUploadError(null);
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleRemoveSelectedFile = (index: number) => {
+    setSelectedFiles((previous) =>
+      previous.filter((_, i) => i !== index),
+    );
+    setUploadError(null);
+  };
+
+  const handleDragOver = (
+    event: React.DragEvent<HTMLElement>,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsOverDropZone(true);
+  };
+
+  const handleDragLeave = (
+    event: React.DragEvent<HTMLElement>,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsOverDropZone(false);
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsOverDropZone(false);
+
+    const files = event.dataTransfer.files;
+    const filesArray = files ? Array.from(files) : [];
+    console.log("handleDrop files:", files?.length, filesArray.map((f) => f.name));
+
+    if (filesArray.length > 0) {
+      setSelectedFiles((previous) => [...previous, ...filesArray]);
+      setUploadError(null);
     }
   };
 
@@ -327,6 +647,7 @@ function ChatView() {
 
     setActiveConversationId(id);
     setInput("");
+    setSelectedFiles([]);
   };
 
   if (initialLoading) {
@@ -354,6 +675,9 @@ function ChatView() {
         activeConversationId={activeConversationId}
         onNewChat={createConversation}
         onSelectConversation={handleSelectConversation}
+        files={conversationFiles}
+        onDeleteFile={removeConversationFile}
+        loading={loading}
       />
 
       <section className="chat-main">
@@ -363,7 +687,21 @@ function ChatView() {
           }
         />
 
-        <main ref={chatContentRef} className="chat-content">
+        <main
+          ref={chatContentRef}
+          className={`chat-content ${
+            isOverDropZone ? "drag-over" : ""
+          }`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          {isOverDropZone && (
+            <div className="drop-overlay">
+              Drop files here to attach them
+            </div>
+          )}
+
           {messages.length === 0 ? (
             <div className="chat-empty">
               <div className="empty-icon">✦</div>
@@ -401,7 +739,52 @@ function ChatView() {
         </main>
 
         <footer className="chat-input-area">
-          <div className="chat-input-container">
+          {selectedFiles.length > 0 && (
+            <div className="selected-files">
+              {selectedFiles.map((file, index) => (
+                <FileAttachment
+                  key={`${file.name}-${index}`}
+                  filename={file.name}
+                  onRemove={() => handleRemoveSelectedFile(index)}
+                  disabled={isUploading || loading}
+                />
+              ))}
+            </div>
+          )}
+
+          {uploadError && (
+            <div className="upload-error">{uploadError}</div>
+          )}
+
+          <div
+            className={`chat-input-container ${
+              isOverDropZone ? "drag-over" : ""
+            }`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <label
+              className={`chat-input-attach ${
+                isUploading || loading ? "disabled" : ""
+              }`}
+              aria-label="Attach file"
+              title={
+                isUploading || loading ? "Upload in progress" : "Attach file"
+              }
+            >
+              📎
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="chat-file-input"
+                tabIndex={-1}
+                onChange={handleFileSelect}
+                disabled={isUploading || loading}
+              />
+            </label>
+
             <textarea
               value={input}
               onChange={(event) => setInput(event.target.value)}
@@ -413,16 +796,23 @@ function ChatView() {
 
             <button
               type="button"
-              onClick={() => void sendMessage()}
-              disabled={!input.trim() || loading}
+              onClick={() => {
+                console.log("send button clicked");
+                void sendMessage();
+              }}
+              disabled={
+                (!input.trim() && selectedFiles.length === 0) ||
+                loading
+              }
               aria-label="Send message"
             >
-              ↑
+              {isUploading ? "⏳" : "↑"}
             </button>
           </div>
 
           <p className="input-hint">
-            Enter to send · Shift + Enter for a new line
+            Enter to send · Shift + Enter for a new line · Drag & drop
+            files to attach
           </p>
         </footer>
       </section>

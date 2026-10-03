@@ -1,3 +1,5 @@
+from typing import Any
+
 from openai import AsyncOpenAI
 
 from app.config import settings
@@ -13,12 +15,11 @@ class KimiProvider(LLMProvider):
         )
         self.model = settings.llm_model
 
-    async def generate(
+    def _build_request_messages(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         system_prompt: str | None = None,
-    ) -> str:
-
+    ) -> list[dict[str, Any]]:
         request_messages = list(messages)
 
         if system_prompt:
@@ -30,9 +31,44 @@ class KimiProvider(LLMProvider):
                 },
             )
 
+        return request_messages
+
+    async def generate(
+        self,
+        messages: list[dict[str, Any]],
+        system_prompt: str | None = None,
+    ) -> str:
+        request_messages = self._build_request_messages(
+            messages,
+            system_prompt,
+        )
+
         response = await self.client.chat.completions.create(
             model=self.model,
             messages=request_messages,
         )
 
         return response.choices[0].message.content or ""
+
+    async def generate_stream(
+        self,
+        messages: list[dict[str, Any]],
+        system_prompt: str | None = None,
+    ):
+        request_messages = self._build_request_messages(
+            messages,
+            system_prompt,
+        )
+
+        stream = await self.client.chat.completions.create(
+            model=self.model,
+            messages=request_messages,
+            stream=True,
+        )
+
+        async for chunk in stream:
+            if not chunk.choices:
+                continue
+            content = chunk.choices[0].delta.content
+            if content:
+                yield content

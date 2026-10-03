@@ -1,3 +1,5 @@
+import logging
+
 import truststore
 
 truststore.inject_into_ssl()
@@ -6,12 +8,18 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.api.chat import router as chat_router
 from app.api.conversations import router as conversation_router
 from app.api.conversation_messages import router as conversation_messages_router
+from app.api.files import router as files_router
 from app.config import settings
 from app.database.database import init_db
 
@@ -47,6 +55,7 @@ app.add_middleware(
 app.include_router(chat_router)
 app.include_router(conversation_router)
 app.include_router(conversation_messages_router)
+app.include_router(files_router)
 
 
 @app.get("/health")
