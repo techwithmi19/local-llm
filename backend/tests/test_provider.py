@@ -4,9 +4,15 @@ from app.config import settings
 from app.services.providers.provider_factory import ProviderFactory
 
 
+def _provider_api_key_configured() -> bool:
+    provider = settings.llm_provider.lower()
+    api_key = getattr(settings, f"{provider}_api_key", "")
+    return bool(api_key)
+
+
 @pytest.mark.skipif(
-    not settings.llm_provider,
-    reason="LLM_PROVIDER is not configured",
+    not _provider_api_key_configured(),
+    reason="API key for the configured LLM_PROVIDER is not set",
 )
 async def test_provider_generates_response():
     """Integration test: verify the configured provider returns a response."""
