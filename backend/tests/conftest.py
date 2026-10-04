@@ -1,3 +1,4 @@
+import os
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
@@ -9,6 +10,11 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+
+# Provide default LLM config for the test suite so startup validation passes.
+# Real provider integration tests still require a matching API key.
+os.environ.setdefault("LLM_PROVIDER", "openai")
+os.environ.setdefault("LLM_MODEL", "gpt-4o-mini")
 
 from app.database.database import Base, get_db
 from app.main import app

@@ -21,6 +21,8 @@ interface Conversation {
   messages: Message[];
 }
 
+const EMPTY_RESPONSE_MESSAGE = "[No response received]";
+
 export interface FileRecord {
   id: number;
   conversation_id: number;
@@ -56,6 +58,7 @@ function ChatView() {
   const chatContentRef = useRef<HTMLElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectedFilesRef = useRef<File[]>([]);
+  const skipLoadForConversationIdRef = useRef<number | null>(null);
 
   const activeConversation = conversations.find(
     (conversation) => conversation.id === activeConversationId,
@@ -116,6 +119,13 @@ function ChatView() {
    */
   useEffect(() => {
     if (activeConversationId === null) {
+      return;
+    }
+
+    // Avoid overwriting state that is already being populated by an active
+    // SSE stream right after a new conversation was created.
+    if (skipLoadForConversationIdRef.current === activeConversationId) {
+      skipLoadForConversationIdRef.current = null;
       return;
     }
 
@@ -336,6 +346,7 @@ function ChatView() {
         ]);
 
         setActiveConversationId(conversationId);
+        skipLoadForConversationIdRef.current = conversationId;
       } catch (error) {
         console.error("Conversation creation error:", error);
         return;
@@ -490,6 +501,12 @@ function ChatView() {
               event.type === "done" &&
               event.assistant_message
             ) {
+              const finalMessage: Message = {
+                ...(event.assistant_message as Message),
+                content:
+                  (event.assistant_message as Message).content.trim() ||
+                  EMPTY_RESPONSE_MESSAGE,
+              };
               setConversations((previous) =>
                 previous.map((conversation) =>
                   conversation.id === conversationId
@@ -498,7 +515,7 @@ function ChatView() {
                         messages: conversation.messages.map(
                           (msg) =>
                             msg.id === assistantPlaceholderId
-                              ? (event.assistant_message as Message)
+                              ? finalMessage
                               : msg,
                         ),
                       }
